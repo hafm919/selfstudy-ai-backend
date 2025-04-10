@@ -1,86 +1,86 @@
 const model = require("../utils/geminiClient");
 
-// --- /notes endpoint ---
-const generateNotes = async (req, res) => {
-  try {
-    const { inputText } = req.body;
+// Shared logic
+const getChapterNameFromText = async (text) => {
+  const prompt = `
+You are an assistant that helps generate chapter names from educational content.
+Given the following text, return a concise and meaningful chapter name for it. Keep it short and relevant.
 
-    const result = await model.generateContent(`
-      Summarize the following content into markdown notes.
+TEXT:
+${text}
 
-      Do NOT include any introduction, explanations, or code blocks.
-      Just return raw markdown notes, starting with headings.
+Respond with just the chapter name.
+  `;
 
-      ${inputText}
-
-      Format:
-      ## Topic Title
-      - Key Point 1
-      - Key Point 2
-    `);
-
-    const response = result.response;
-    const rawText = await response.text();
-
-    // Clean response: remove intro, code fences, etc.
-    let cleanedText = rawText
-      .replace(/(^.*?(?=##|\n##))/s, "") // Remove anything before first markdown heading
-      .replace(/```(markdown)?/g, "") // Remove markdown code blocks
-      .trim();
-
-    res.status(200).json({ notes: cleanedText });
-  } catch (error) {
-    console.error("Gemini Notes Error:", error.message);
-    res.status(500).json({ error: "Failed to generate notes" });
-  }
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  return response.text().trim();
 };
+async function getNotesFromText(inputText) {
+  const result = await model.generateContent(`
+    Summarize the following content into markdown notes.
 
-// --- /cards endpoint ---
-const generateFlashcards = async (req, res) => {
+    Do NOT include any introduction, explanations, or code blocks.
+    Just return raw markdown notes, starting with headings.
+
+    ${inputText}
+
+    Format:
+    ## Topic Title
+    - Key Point 1
+    - Key Point 2
+  `);
+
+  const rawText = await result.response.text();
+
+  return rawText
+    .replace(/(^.*?(?=##|\n##))/s, "")
+    .replace(/```(markdown)?/g, "")
+    .trim();
+}
+
+async function getFlashcardsFromText(inputText) {
+  const result = await model.generateContent(`
+    Generate 5 flashcards based on the study material below. Each flashcard should be a JSON object with a "question" and an "answer".
+
+    ONLY return a raw JSON array. Do NOT include code fences, markdown, or explanations.
+
+    ${inputText}
+
+    Format:
+    [
+      { "question": "...", "answer": "..." },
+      ...
+    ]
+  `);
+
+  const rawText = await result.response.text();
+  const jsonStart = rawText.indexOf("[");
+  const jsonEnd = rawText.lastIndexOf("]");
+  const jsonString = rawText.slice(jsonStart, jsonEnd + 1);
+
+  return JSON.parse(jsonString);
+}
+
+// Unified controller
+const generateNotesAndFlashcards = async (req, res, next) => {
   try {
     const { inputText } = req.body;
 
-    const result = await model.generateContent(`
-      Generate 5 flashcards based on the study material below. Each flashcard should be a JSON object with a "question" and an "answer".
+    const [notes, flashcards, chapterName] = await Promise.all([
+      getNotesFromText(inputText),
+      getFlashcardsFromText(inputText),
+      getChapterNameFromText(inputText),
+    ]);
 
-      ONLY return a raw JSON array. Do NOT include code fences, markdown, or explanations.
-
-      ${inputText}
-
-      Format:
-      [
-        { "question": "...", "answer": "..." },
-        ...
-      ]
-    `);
-
-    const response = result.response;
-    const rawText = await response.text();
-
-    // Extract the JSON array from the response
-    const jsonStart = rawText.indexOf("[");
-    const jsonEnd = rawText.lastIndexOf("]");
-    const jsonString = rawText.slice(jsonStart, jsonEnd + 1);
-
-    let flashcards;
-    try {
-      flashcards = JSON.parse(jsonString);
-    } catch (parseErr) {
-      return res.status(500).json({
-        error:
-          "Failed to parse flashcards. Gemini might have returned an unexpected format.",
-        raw: rawText,
-      });
-    }
-
-    res.status(200).json({ flashcards });
+    req.generatedContent = { notes, flashcards, chapterName };
+    next();
   } catch (error) {
-    console.error("Gemini Flashcard Error:", error.message);
-    res.status(500).json({ error: "Failed to generate flashcards" });
+    console.error("Unified Notes+Cards Error:", error.message);
+    res.status(500).json({ error: "Failed to generate notes and flashcards" });
   }
 };
 
 module.exports = {
-  generateNotes,
-  generateFlashcards,
+  generateNotesAndFlashcards,
 };
