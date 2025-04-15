@@ -7,6 +7,7 @@ const passport = require("./middleware/passportConfig");
 const geminiRoutes = require("./routers/geminiRouter");
 const subjectsRouter = require("./routers/subjectsRouter");
 const authRouter = require("./routers/authRouter");
+const calendarRouter = require("./routers/calendarRouter");
 
 //initalization and setup
 dotenv.config();
@@ -25,6 +26,7 @@ app.use(
 //routes
 app.use("/api/subjects", subjectsRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/calendar", calendarRouter);
 
 app.listen(3000, () => {
   console.log("Server running at http://localhost:3000");

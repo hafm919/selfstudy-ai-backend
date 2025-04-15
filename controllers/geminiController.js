@@ -62,18 +62,72 @@ async function getFlashcardsFromText(inputText) {
   return JSON.parse(jsonString);
 }
 
+const generateMindMapFromText = async (inputText) => {
+  const prompt = `
+You are an assistant that generates mind maps based on educational content.
+Given the following text, break it down into key concepts, and represent it in a mind map format where each concept is a node.
+Connect related concepts with edges.
+
+TEXT:
+${inputText}
+
+Respond with an object containing the nodes and edges for a mind map in this format:
+
+{
+  "nodes": [
+    { "id": "1", "label": "Concept 1" },
+    { "id": "2", "label": "Concept 2" }
+  ],
+  "edges": [
+    { "source": "1", "target": "2" }
+  ]
+}
+
+Do NOT include markdown code blocks or extra explanation.
+`;
+
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  const rawText = await response.text();
+
+  // Remove any markdown fences just in case
+  const cleanText = rawText.replace(/^```json\s*|\s*```$/g, "").trim();
+
+  try {
+    const { nodes, edges } = JSON.parse(cleanText);
+
+    // Apply required structure for React Flow
+    const positionedNodes = nodes.map((node, index) => ({
+      id: node.id,
+      data: { label: node.label },
+      position: { x: (index % 5) * 200, y: Math.floor(index / 5) * 150 },
+    }));
+
+    const validEdges = edges.map((edge, idx) => ({
+      id: `e${edge.source}-${edge.target}-${idx}`,
+      source: edge.source,
+      target: edge.target,
+    }));
+
+    return { nodes: positionedNodes, edges: validEdges };
+  } catch (error) {
+    throw new Error("Error parsing mind map JSON: " + error.message);
+  }
+};
+
 // Unified controller
 const generateNotesAndFlashcards = async (req, res, next) => {
   try {
     const { inputText } = req.body;
 
-    const [notes, flashcards, chapterName] = await Promise.all([
+    const [notes, flashcards, chapterName, mindMapData] = await Promise.all([
       getNotesFromText(inputText),
       getFlashcardsFromText(inputText),
       getChapterNameFromText(inputText),
+      generateMindMapFromText(inputText), // Generate mind map data
     ]);
 
-    req.generatedContent = { notes, flashcards, chapterName };
+    req.generatedContent = { notes, flashcards, chapterName, mindMapData };
     next();
   } catch (error) {
     console.error("Unified Notes+Cards Error:", error.message);

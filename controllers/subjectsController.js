@@ -56,11 +56,12 @@ const getChapterNames = async (req, res) => {
 };
 
 const saveChapter = async (req, res) => {
-  console.log("Entered save chapter");
   try {
-    const { notes, flashcards, chapterName } = req.generatedContent;
+    const { notes, flashcards, chapterName, mindMapData } =
+      req.generatedContent;
     const { subjectId } = req.params;
 
+    // Create the new chapter
     const newChapter = await prisma.chapter.create({
       data: {
         title: chapterName,
@@ -79,10 +80,40 @@ const saveChapter = async (req, res) => {
       },
     });
 
+    // Save the mind map data in the MindMap table
+    await prisma.mindMap.create({
+      data: {
+        chapterId: newChapter.id,
+        mindMapData: mindMapData, // Store the mind map data as JSON
+      },
+    });
+
+    // Respond with the new chapter and mind map details
     res.status(201).json(newChapter);
   } catch (error) {
     console.error("Error saving content:", error.message);
     res.status(500).json({ error: "Failed to save generated content" });
+  }
+};
+
+const getChapterMindMap = async (req, res) => {
+  const { chapterId } = req.params;
+
+  try {
+    const chapter = await prisma.chapter.findUnique({
+      where: { id: chapterId },
+      include: {
+        MindMap: true,
+      },
+    });
+
+    if (!chapter || !chapter.MindMap) {
+      return res.status(404).json({ error: "Mind map not found" });
+    }
+    res.json(chapter.MindMap.mindMapData); // or just chapter.mindMap if you want other fields too
+  } catch (error) {
+    console.error("Error fetching mind map:", error.message);
+    res.status(500).json({ error: "Failed to fetch mind map" });
   }
 };
 
@@ -145,4 +176,5 @@ module.exports = {
   getChapterNames,
   getChapterNotes,
   getChapterFlashCards,
+  getChapterMindMap,
 };

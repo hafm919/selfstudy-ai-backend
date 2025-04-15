@@ -39,6 +39,12 @@ subjectsRouter.get(
   subjectsController.getChapterFlashCards
 );
 
+subjectsRouter.get(
+  "/:subjectId/chapter/:chapterId/mindmap",
+  passport.authenticate("jwt", { session: false }),
+  subjectsController.getChapterMindMap
+);
+
 // subjectsRouter.get(
 //   "/:subjectId/chapter/:chapterId",
 //   passport.authenticate("jwt", { session: false }),
