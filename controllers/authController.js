@@ -38,7 +38,7 @@ exports.signUpUser = [
         name: req.body.fullName,
       },
     });
-    res.status(200).send("User Created Succesfully");
+    res.status(200).json({ message: "User Created Successfully" });
     next();
   },
 ];
